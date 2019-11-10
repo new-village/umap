@@ -8,7 +8,7 @@ jobs:
     - run:
         name: Setup testing environment
         command: |
-          pip install -r requirements.txt
+          pip install -r requirements.txt --user
           echo $HOME
     - run:
         name: Run Tests
