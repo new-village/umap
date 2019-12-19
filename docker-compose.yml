@@ -1,0 +1,29 @@
+version: '3.1'
+
+services:
+  umap:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - "./umap:/umap"
+    working_dir: /umap
+    tty: true
+    command: flask run --host 0.0.0.0
+
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_DATABASE:umap
+    volumes:
+      - ./.docker/mongo:/data/db
+      - ./.docker/configdb:/data/configdb
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
