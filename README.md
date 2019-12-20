@@ -10,8 +10,9 @@ UMAP is an all-in-one solution for Japanese horse racing prediction. It is possi
 ## Usage
 1. Download & Start Umap Service
 ```bash
-git clone git@github.com:New-Village/umap.git
-cd umap
-sudo docker-compose up --build -d
+$ cd ~
+$ git clone git@github.com:New-Village/umap.git
+$ cd umap
+$ sudo docker-compose -f "docker-compose.yml" up -d --build
 ```
 2. Access http://{SERVER}:5000/api/
