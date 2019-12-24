@@ -6,10 +6,10 @@ from controller import int_fmt, load_page, str_fmt, to_course_full, to_place_nam
 
 def collect(_rid):
     # Get html
-    base_url = "https://race.netkeiba.com/?pid=race_old&id=c{rid}"
+    base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_list"
     if re.match(r"^\d{12}$", _rid):
         url = base_url.replace("{rid}", _rid)
-        page = load_page(url, ".race_table_old")
+        page = load_page(url, ".ShutubaTable")
     else:
         return {"status": "ERROR", "message": "Invalid URL parameter: " + _rid}
 
@@ -20,8 +20,9 @@ def collect(_rid):
         return {"status": "ERROR", "message": "There is no page: " + url}
 
     if "_id" in race:
-        db = vault()
-        db.races.update({"_id": race["_id"]}, race, upsert=True)
+        print(race)
+        # db = vault()
+        # db.races.update({"_id": race["_id"]}, race, upsert=True)
     else:
         return {"status": "ERROR", "message": "There is no id in page: " + race}
 
@@ -55,49 +56,50 @@ def parse_nk_race(_page):
     race = {}
 
     # RACE ID
-    row = list(_page.find("ul.fc > li > a.active", first=True).links)[0]
+    row = list(_page.find("ul.fc > li.Active > a", first=True).links)[0]
     race["_id"] = str_fmt(row, r"\d+")
     # ROUND
-    row = _page.find("dl.racedata > dt", first=True).text
+    row = _page.find("span.RaceNum", first=True).text
     race["round"] = int_fmt(row, r"(\d{1,2})R")
     # TITLE
-    row = _page.find("dl.racedata > dd > h1", first=True).text
-    race["title"] = str_fmt(row, r"[^!-~\xa0]+")
+    row = _page.find("div.RaceName", first=True).text
+    race["title"] = row
+    # race["title"] = str_fmt(row, r"[^!-~\xa0]+")
     # GRADE
     row = _page.find("title", first=True).text
     race["grade"] = str_fmt(row, r"(G\d{1})")
     # TRACK
-    row = _page.find("dl.racedata > dd > p", first=True).text
+    row = _page.find("div.RaceData01", first=True).text
     abbr_track = str_fmt(row, r"芝|ダ|障")
     race["track"] = to_course_full(abbr_track)
     # DISTANCE
-    row = _page.find("dl.racedata > dd > p", first=True).text
+    row = _page.find("div.RaceData01", first=True).text
     race["distance"] = int_fmt(row, r"\d{4}")
     # WEATHER
-    row = _page.find("dl.racedata > dd > p")[1].text
+    row = _page.find("div.RaceData01", first=True).text
     race["weather"] = str_fmt(row, r"晴|曇|小雨|雨|小雪|雪")
     # GOING
-    row = _page.find("dl.racedata > dd > p")[1].text
+    row = _page.find("div.RaceData01", first=True).text
     race["going"] = str_fmt(row, r"良|稍重|重|不良")
     # RACE DATE
-    row = _page.find("div.race_otherdata > p", first=True).text
-    dt = str_fmt(row, r"\d{4}/\d{2}/\d{2}")
-    row = _page.find("dl.racedata > dd > p")[1].text
+    row = _page.find("title", first=True).text
+    dt = str_fmt(row, r"\d{4}年\d{1,2}月\d{1,2}日")
+    row = _page.find("div.RaceData01", first=True).text
     tm = str_fmt(row, r"\d{2}:\d{2}")
     if tm == "":
         tm = "0:00"
-    race["date"] = datetime.strptime(dt + " " + tm, "%Y/%m/%d %H:%M")
+    race["date"] = datetime.strptime(dt + " " + tm, "%Y年%m月%d日 %H:%M")
     # PLACE NAME
     place_code = race["_id"][4:6]
     race["place"] = to_place_name(place_code)
     # HEAD COUNT
-    count = _page.find("div.race_otherdata > p")[2].text
-    race["count"] = int_fmt(count, r"[0-9]+")
+    count = _page.find("div.RaceData02 > span")[7].text
+    race["count"] = int_fmt(count, r"([0-9]+)頭")
     # MAX PRIZE
-    prize = _page.find("div.race_otherdata > p")[3].text
+    prize = _page.find("div.RaceData02 > span")[8].text
     race["max_prize"] = int_fmt(prize, r"\d+")
     # ENTRY
-    urls = [list(horse.links)[0] for horse in _page.find("td.horsename")]
+    urls = [list(horse.links)[0] for horse in _page.find("td.Horse_Info")]
     horses = [{"horse_id": str_fmt(url, r"\d+")} for url in urls]
     race["entry"] = horses
 
