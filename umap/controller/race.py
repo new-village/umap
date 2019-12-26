@@ -62,9 +62,7 @@ def parse_nk_race(_page):
     row = _page.find("span.RaceNum", first=True).text
     race["round"] = int_fmt(row, r"(\d{1,2})R")
     # TITLE
-    row = _page.find("div.RaceName", first=True).text
-    race["title"] = row
-    # race["title"] = str_fmt(row, r"[^!-~\xa0]+")
+    race["title"] = _page.find("div.RaceName", first=True).text
     # GRADE
     row = _page.find("title", first=True).text
     race["grade"] = str_fmt(row, r"(G\d{1})")

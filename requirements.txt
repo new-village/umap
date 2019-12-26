@@ -1,4 +1,4 @@
 Flask==1.1.1
-flask-restful==0.3.7
+Flask-RESTful==0.3.7
+Flask-PyMongo==2.3.0
 requests-html==0.10.0
-pymongo==3.10.0

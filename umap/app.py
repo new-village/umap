@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request
 from flask_restful import Resource, Api
+from flask_pymongo import PyMongo
 from datetime import datetime, timedelta
-from controller import races
+from controller import race
+
 
 app = Flask(__name__)
+app.config["MONGO_URI"] = "mongodb://localhost:27017/umap"
+mongo = PyMongo(app)
 api = Api(app)
 
 
@@ -24,7 +28,7 @@ class Races(Resource):
             now = datetime.now() + timedelta(weeks=1)
 
         # Collect Race Data
-        msg = races.bulk_collect(now.strftime('%Y'), now.strftime('%m'))
+        msg = race.bulk_collect(now.strftime('%Y'), now.strftime('%m'))
         return {'POST Races': str(msg)}
 
 
@@ -34,7 +38,7 @@ class Race(Resource):
 
     def post(self, race_id):
         # Collect Race Data
-        msg = races.collect(race_id)
+        msg = race.collect(race_id)
         return {'POST Race': str(msg)}
 
 
