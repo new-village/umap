@@ -1,5 +1,6 @@
 import re
 import time
+from app import mongo
 from datetime import datetime
 from controller import int_fmt, load_page, str_fmt, to_course_full, to_place_name, vault
 
@@ -19,10 +20,9 @@ def collect(_rid):
     else:
         return {"status": "ERROR", "message": "There is no page: " + url}
 
+    # Insert or Update race info
     if "_id" in race:
-        print(race)
-        # db = vault()
-        # db.races.update({"_id": race["_id"]}, race, upsert=True)
+        mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
     else:
         return {"status": "ERROR", "message": "There is no id in page: " + race}
 

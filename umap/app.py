@@ -29,7 +29,7 @@ class Races(Resource):
 
         # Collect Race Data
         msg = race.bulk_collect(now.strftime('%Y'), now.strftime('%m'))
-        return {'POST Races': str(msg)}
+        return msg
 
 
 class Race(Resource):
@@ -39,7 +39,7 @@ class Race(Resource):
     def post(self, race_id):
         # Collect Race Data
         msg = race.collect(race_id)
-        return {'POST Race': str(msg)}
+        return msg
 
 
 api.add_resource(Races, '/races')
