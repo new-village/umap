@@ -1,19 +1,67 @@
 import re
-import pymongo
-from requests_html import HTMLSession
+from bs4 import BeautifulSoup as bs
+from selenium.webdriver import Chrome, ChromeOptions
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-session = HTMLSession()
 
+def load(_url, _selector=None):
+    """ Function of HTML Collection (Supported Javascript）
+        _url: Target URL
+        _selector: Validation Class
+        * If there is no _selector in HTML, Fuction return None Object
+    """
+    # Launch Chrome in Headless Mode 
+    op = ChromeOptions()
+    op.add_argument("--headless")
+    driver = Chrome(options=op)
 
-def load_page(_url, _check_class):
+    # Collect Target Page HTML
     try:
-        page = session.get(_url).html
-        if len(page.find(_check_class)) == 0:
-            page = None
+        driver.get(_url)
+        if _selector is not None:
+            WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, _selector)))
+        page = bs(driver.page_source, "lxml")
     except Exception:
         page = None
 
     return page
+
+
+def fmt(_target, _reg, _type="str"):
+    """ Function of Regex Extraction and Type Casting
+        _target: Target Value
+        _reg: Regex
+        _type: Cast Type
+    """
+    # Extract Target Value
+    fmt = re.compile(_reg)
+    if _target is not None and fmt.search(_target):
+        val = fmt.findall(_target)[0]
+    else:
+        val = None
+
+    # Cast Value
+    if _type == "int":
+        val = int(re.sub(",", "", val)) if val is not None else 0
+    elif _type == "float":
+        val = float(re.sub(",", "", val)) if val is not None else 0
+    else:
+        val = str(val) if val is not None else ""    
+
+    return val
+
+
+# def load_page(_url, _check_class):
+#     try:
+#         page = session.get(_url).html
+#         if len(page.find(_check_class)) == 0:
+#             page = None
+#     except Exception:
+#         page = None
+
+#     return page
 
 
 def int_fmt(_target, _reg):
@@ -59,10 +107,3 @@ def to_course_full(abbr):
     master = {"ダ": "ダート", "障": "障害", "芝": "芝"}
     course_full = master[abbr] if abbr != '' else 0
     return course_full
-
-
-def vault():
-    """ Connect Vault Database on local MongoDB
-    """
-    client = pymongo.MongoClient("localhost", 27017)
-    return client.vault

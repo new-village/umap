@@ -7,9 +7,9 @@ services:
       - "5000:5000"
     volumes:
       - "./umap:/umap"
-    working_dir: /umap
+    working_dir: /umap/umap
     tty: true
-    command: flask run --host 0.0.0.0
+    command: python app.py
 
   mongo:
     image: mongo

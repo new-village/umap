@@ -1,16 +1,16 @@
 import re
 import time
-from app import mongo
 from datetime import datetime
-from controller import int_fmt, load_page, str_fmt, to_course_full, to_place_name, vault
 
+from app import mongo
+from controller import load, fmt, to_course_full, to_place_name
 
 def collect(_rid):
     # Get html
     base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_list"
     if re.match(r"^\d{12}$", _rid):
         url = base_url.replace("{rid}", _rid)
-        page = load_page(url, ".ShutubaTable")
+        page = load(url, "transition-color")
     else:
         return {"status": "ERROR", "message": "Invalid URL parameter: " + _rid}
 
@@ -24,25 +24,24 @@ def collect(_rid):
     if "_id" in race:
         mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
     else:
-        return {"status": "ERROR", "message": "There is no id in page: " + race}
+        return {"status": "ERROR", "message": "There is no id in page: " + race["_id"]}
 
-    return {"status": "SUCCESS", "message": "Start race collection process for " + _rid}
+    return {"status": "SUCCESS", "message": str(race)}
 
 
 def bulk_collect(_year, _month):
     url = "https://keiba.yahoo.co.jp/schedule/list/" + _year + "/?month=" + _month
-    page = load_page(url, ".layoutCol2M")
+    page = load(url, "layoutCol2M")
 
     # Parse race info
     if page is not None:
-        race_id = parse_spn_rid(page)
+        race_ids = parse_spn_rids(page)
     else:
         return {"status": "ERROR", "message": "There is no page: " + url}
 
-    if len(race_id) != 0:
-        for rid in race_id:
+    if len(race_ids) > 0:
+        for rid in race_ids:
             collect(rid)
-            time.sleep(5)
     else:
         return {"status": "ERROR", "message": "There is no page: " + url}
 
@@ -51,71 +50,55 @@ def bulk_collect(_year, _month):
 
 def parse_nk_race(_page):
     """取得したレース出走情報のHTMLから辞書を作成
-    netkeiba.comのレースページから情報をパースしてjson形式で返すファンクション
+    netkeiba.comのレースページから情報をパースしてdict形式で返すファンクション
     """
     race = {}
 
     # RACE ID
-    row = list(_page.find("ul.fc > li.Active > a", first=True).links)[0]
-    race["_id"] = str_fmt(row, r"\d+")
+    tmp = _page.select_one("ul.fc > li.Active > a")
+    race["_id"] = fmt(tmp.get("href"), r"(\d+)")
     # ROUND
-    row = _page.find("span.RaceNum", first=True).text
-    race["round"] = int_fmt(row, r"(\d{1,2})R")
+    race["round"] = fmt(tmp.text, r"\d+", "int")
     # TITLE
-    race["title"] = _page.find("div.RaceName", first=True).text
+    tmp = _page.select_one("div.RaceName")
+    race["title"] = fmt(tmp.text, r"[^\x01-\x2f\x3a-\x7E]+")
     # GRADE
-    row = _page.find("title", first=True).text
-    race["grade"] = str_fmt(row, r"(G\d{1})")
+    title = _page.title.text
+    race["grade"] = fmt(title, r"(G\d{1})")
     # TRACK
-    row = _page.find("div.RaceData01", first=True).text
-    abbr_track = str_fmt(row, r"芝|ダ|障")
-    race["track"] = to_course_full(abbr_track)
+    rd01 = _page.select_one("div.RaceData01").text
+    race["track"] = to_course_full(fmt(rd01, r"芝|ダ|障"))
     # DISTANCE
-    row = _page.find("div.RaceData01", first=True).text
-    race["distance"] = int_fmt(row, r"\d{4}")
+    race["distance"] = fmt(rd01, r"\d{4}", "int")
     # WEATHER
-    row = _page.find("div.RaceData01", first=True).text
-    race["weather"] = str_fmt(row, r"晴|曇|小雨|雨|小雪|雪")
+    race["weather"] = fmt(rd01, r"晴|曇|小雨|雨|小雪|雪")
     # GOING
-    row = _page.find("div.RaceData01", first=True).text
-    race["going"] = str_fmt(row, r"良|稍重|重|不良")
+    race["going"] = fmt(rd01, r"良|稍重|重|不良")
     # RACE DATE
-    row = _page.find("title", first=True).text
-    dt = str_fmt(row, r"\d{4}年\d{1,2}月\d{1,2}日")
-    row = _page.find("div.RaceData01", first=True).text
-    tm = str_fmt(row, r"\d{2}:\d{2}")
-    if tm == "":
-        tm = "0:00"
+    dt = fmt(title, r"\d{4}年\d{1,2}月\d{1,2}日")
+    tmp = fmt(rd01, r"\d{2}:\d{2}")
+    tm = tmp if tmp != "" else "0:00"
     race["date"] = datetime.strptime(dt + " " + tm, "%Y年%m月%d日 %H:%M")
     # PLACE NAME
-    place_code = race["_id"][4:6]
-    race["place"] = to_place_name(place_code)
+    race["place"] = to_place_name(race["_id"][4:6])
     # HEAD COUNT
-    count = _page.find("div.RaceData02 > span")[7].text
-    race["count"] = int_fmt(count, r"([0-9]+)頭")
+    rd02 = _page.select("div.RaceData02 > span")
+    race["count"] = fmt(rd02[7].text, r"([0-9]+)頭", "int")
     # MAX PRIZE
-    prize = _page.find("div.RaceData02 > span")[8].text
-    race["max_prize"] = int_fmt(prize, r"\d+")
-    # ENTRY
-    urls = [list(horse.links)[0] for horse in _page.find("td.Horse_Info")]
-    horses = [{"horse_id": str_fmt(url, r"\d+")} for url in urls]
-    race["entry"] = horses
+    race["max_prize"] = fmt(rd02[8].text, r"\d+")
 
     return race
 
 
-def parse_spn_rid(_page):
-    holds = []
-    for td in _page.find("table.scheLs > tbody > tr > td"):
-        links = str_fmt(str(td.links), r"/race/list/(\d+)/")
-        holds.append(links)
+def parse_spn_rids(_page):
+    """取得したレース出走情報のHTMLからレースIDの配列を作成
+    Yahoo競馬のレースページから情報をパースしてlist形式で返すファンクション
+    """
+    race_ids = []
+    for link in _page.select_one("table.scheLs > tbody").find_all("a"):
+        tmp = fmt(link.get("href"), r"/race/list/(\d+)/")
+        if tmp != "":
+            hold = ["20" + tmp + str(i + 1).zfill(2) for i in range(12)]
+            race_ids.extend(hold)
 
-    # Delete Blank Element
-    holds = ["20" + hold for hold in holds if hold]
-
-    # Generate race id from holds
-    rid = []
-    for hold in holds:
-        rid.extend([hold + str(i + 1).zfill(2) for i in range(12)])
-
-    return rid
+    return race_ids
