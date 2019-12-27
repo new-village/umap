@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 
 from app import mongo
-from controller import load, fmt, to_course_full, to_place_name
+from controller import load, fmt, to_course, to_place
 
 def collect(_rid):
     # Get html
