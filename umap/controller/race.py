@@ -16,7 +16,7 @@ def collect(_rid):
 
     # Get Entry html
     base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
-    if page is not None:
+    if page is None:
         url = base_url.replace("{rid}", _rid)
         page = load(url, "ShutubaTable")
 
@@ -91,7 +91,7 @@ def parse_nk_race(_page):
     rd02 = _page.select("div.RaceData02 > span")
     race["count"] = fmt(rd02[7].text, r"([0-9]+)頭", "int")
     # MAX PRIZE
-    race["max_prize"] = fmt(rd02[8].text, r"\d+")
+    race["max_prize"] = fmt(rd02[8].text, r"\d+", "int") * 10000
     # ENTRY
     race["entry"] = parse_nk_result(_page)
 
@@ -101,6 +101,10 @@ def parse_nk_race(_page):
 def parse_nk_result(_page):
     results = []
     odds = parse_nk_odds(_page)
+
+    # Get Prize List
+    rd02 = _page.select("div.RaceData02 > span")
+    pz_list = [fmt(pz, r"\d+", "int") * 10000 for pz in rd02[8].text.split(",")]
 
     for line in _page.select("table#All_Result_Table > tbody > tr"):
         result = {}
@@ -112,7 +116,7 @@ def parse_nk_result(_page):
         # BRACKET
         result["bracket"] = fmt(td[1].text, r"\d+", "int")
         # HORSE ID
-        result["horse_id"] = fmt(td[3].a.get("href"), r"\d+", "int")
+        result["horse_id"] = fmt(td[3].a.get("href"), r"\d+")
         # HORSE NAME
         result["horse_name"] = fmt(td[3].text, r"[^\x01-\x7E]+")
         # SEX
@@ -122,7 +126,7 @@ def parse_nk_result(_page):
         # BURDEN
         result["burden"] = fmt(td[5].text, r"\d{1,2}\.\d{1}", "float")
         # JOCKEY ID
-        result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+", "int")
+        result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+")
         # JOCKEY NAME
         result["jockey_name"] = fmt(td[6].text, r"[^\x01-\x7E]+")
         # TIME
@@ -130,7 +134,7 @@ def parse_nk_result(_page):
         sec = fmt(td[7].text, r"\d{1}:(\d{1,2}\.\d{1})", "float")
         result["time"] = min + sec
         # TRAINER ID
-        result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+", "int")
+        result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+")
         # TRAINER NAME
         result["trainer_name"] = fmt(td[13].a.text, r"[^\x01-\x7E]+")
         # WEIGHT
@@ -139,6 +143,11 @@ def parse_nk_result(_page):
         result["weight_diff"] = fmt(td[14].text, r"\d+\(([+-]?\d+)\)", "int")
         # ODDS
         result.update(odds[result["horse_name"]])
+        # PRIZE
+        if result["rank"] <= len(pz_list) and result["rank"] != 0:
+            result["prize"] = pz_list[result["rank"]-1]
+        else:
+            result["prize"] = 0
 
         results.append(result)
     
