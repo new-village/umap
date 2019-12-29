@@ -6,13 +6,19 @@ from app import mongo
 from controller import load, fmt, to_course, to_place
 
 def collect(_rid):
-    # Get html
+    # Get Result html
     base_url = "https://racev3.netkeiba.com/race/result.html?race_id={rid}&rf=race_list"
     if re.match(r"^\d{12}$", _rid):
         url = base_url.replace("{rid}", _rid)
         page = load(url, "ResultTableWrap")
     else:
         return {"status": "ERROR", "message": "Invalid URL parameter: " + _rid}
+
+    # Get Entry html
+    base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
+    if page is not None:
+        url = base_url.replace("{rid}", _rid)
+        page = load(url, "ShutubaTable")
 
     # Parse race info
     if page is not None:
@@ -151,15 +157,15 @@ def parse_nk_odds(_page):
         late = {}
         # Odds
         horse = fmt(tan.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-        late["win"] = fmt(tan.select_one("td.Popular").text, r"\d{1,3}\.\d{1}", "float")
+        late["win"] = fmt(tan.select_one("td.Odds").text, r"\d{1,3}\.\d{1}", "float")
         odds[horse] = late
 
     for fuku in odds_page.select("div#odds_fuku_block > table > tbody > tr")[1:]:
         late = {}
         # Odds
         horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-        late["show_min"] = fmt(fuku.select_one("td.Popular").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
-        late["show_max"] = fmt(fuku.select_one("td.Popular").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
+        late["show_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
+        late["show_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
         odds[horse].update(late)
 
     return odds
