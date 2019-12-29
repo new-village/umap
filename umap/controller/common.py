@@ -25,6 +25,8 @@ def load(_url, _selector=None):
         page = bs(driver.page_source, "lxml")
     except Exception:
         page = None
+    finally:
+        driver.close()
 
     return page
 
