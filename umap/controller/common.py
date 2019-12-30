@@ -25,6 +25,8 @@ def load(_url, _selector=None):
         if _selector is not None:
             WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, _selector)))
         page = bs(driver.page_source, "lxml")
+        if not page.select("."+_selector):
+            page = None
     except Exception:
         page = None
     finally:
@@ -41,11 +43,7 @@ def fmt(_target, _reg, _type="str"):
         _type: Cast Type
     """
     # Extract Target Value
-    fmt = re.compile(_reg)
-    if _target is not None and fmt.search(_target):
-        val = fmt.findall(_target)[0]
-    else:
-        val = None
+    val = check_format(_target, _reg)
 
     # Cast Value
     if _type == "int":
@@ -54,6 +52,17 @@ def fmt(_target, _reg, _type="str"):
         val = float(re.sub(",", "", val)) if val is not None else 0
     else:
         val = str(val) if val is not None else ""    
+
+    return val
+
+
+def check_format(_target, _reg):
+    # check target variables
+    fmt = re.compile(_reg)
+    if _target is not None and fmt.search(_target):
+        val = fmt.findall(_target)[0]
+    else:
+        val = None
 
     return val
 
