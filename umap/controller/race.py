@@ -18,7 +18,7 @@ def collect(_rid):
     base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
     if page is None:
         url = base_url.replace("{rid}", _rid)
-        page = load(url, "ShutubaTable")
+        page = load(url, "tablesorter")
 
     # Parse race info
     if page is not None:
