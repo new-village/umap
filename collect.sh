@@ -20,7 +20,7 @@ YEAR=$1
 for i in `seq 1 12`
 do
   MONTH=`printf %02d $i`
-  echo "`date` [START] ${YEAR}/${MONTH}"
+  echo "`date` [START] COLLECTING FOR ${YEAR}/${MONTH}"
   `curl -s -X POST ${HOST}:${PORT}/${ENTITY} -d "YYYYMM=${YEAR}${MONTH}"`
 done
 

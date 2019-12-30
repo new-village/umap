@@ -15,6 +15,8 @@ def load(_url, _selector=None):
     # Launch Chrome in Headless Mode 
     op = ChromeOptions()
     op.add_argument("--headless")
+    op.add_argument('--disable-gpu')
+    op.add_argument('--blink-settings=imagesEnabled=false')
     driver = Chrome(options=op)
 
     # Collect Target Page HTML
@@ -27,6 +29,7 @@ def load(_url, _selector=None):
         page = None
     finally:
         driver.close()
+        driver.quit()
 
     return page
 
