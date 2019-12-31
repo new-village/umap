@@ -1,4 +1,5 @@
 import re
+import time
 from bs4 import BeautifulSoup as bs
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.common.by import By
@@ -23,15 +24,17 @@ def load(_url, _selector=None):
     try:
         driver.get(_url)
         if _selector is not None:
-            WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, _selector)))
+            WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CLASS_NAME, _selector)))
         page = bs(driver.page_source, "lxml")
-        if not page.select("."+_selector):
+        if _selector is not None and not page.select("."+_selector):
+            print("ERROR: " + _url)
             page = None
     except Exception:
         page = None
     finally:
         driver.close()
         driver.quit()
+        time.sleep(5)
 
     return page
 

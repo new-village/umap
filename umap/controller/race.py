@@ -160,22 +160,30 @@ def parse_nk_odds(_page):
    # Get html
     base_url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={rid}&rf=shutuba_submenu"
     rid = fmt(_page.select_one("ul.fc > li.Active > a").get("href"), r"(\d+)")
-    odds_page = load(base_url.replace("{rid}", rid), "transition-color")
+    odds_page = load(base_url.replace("{rid}", rid), "Odds")
 
-    for tan in odds_page.select("div#odds_tan_block > table > tbody > tr")[1:]:
+    # Parse race info
+    if odds_page is not None:
+        odds_table = odds_page.select("table.RaceOdds_HorseList_Table")
+    else:
+        return {"status": "ERROR", "message": "There is no odds page: " + rid}
+
+    # Get Win(Tansho) Odds or Predicted Odds
+    for tan in odds_table[0].select("tbody > tr")[1:]:
         late = {}
         # Odds
         horse = fmt(tan.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
         late["win"] = fmt(tan.select_one("td.Odds").text, r"\d{1,3}\.\d{1}", "float")
         odds[horse] = late
 
-    for fuku in odds_page.select("div#odds_fuku_block > table > tbody > tr")[1:]:
-        late = {}
-        # Odds
-        horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-        late["show_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
-        late["show_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
-        odds[horse].update(late)
+    if len(odds_table) == 2:
+        for fuku in odds_table[1].select("tbody > tr")[1:]:
+            late = {}
+            # Odds
+            horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
+            late["show_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
+            late["show_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
+            odds[horse].update(late)
 
     return odds
 
