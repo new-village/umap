@@ -5,6 +5,7 @@ from datetime import datetime
 from app import mongo
 from controller import load, fmt, to_course, to_place
 
+
 def collect(_rid):
     # Get Result html
     base_url = "https://racev3.netkeiba.com/race/result.html?race_id={rid}&rf=race_list"
@@ -66,10 +67,9 @@ def parse_nk_race(_page):
     # ROUND
     race["round"] = fmt(tmp.text, r"\d+", "int")
     # TITLE
-    tmp = _page.select_one("div.RaceName")
-    race["title"] = fmt(tmp.text, r"[^\x01-\x2f\x3a-\x7E]+")
-    # GRADE
     title = _page.title.text
+    race["title"] = fmt(title, r"([^\x01-\x7E]+)")
+    # GRADE
     race["grade"] = fmt(title, r"(G\d{1})")
     # TRACK
     rd01 = _page.select_one("div.RaceData01").text
@@ -100,7 +100,10 @@ def parse_nk_race(_page):
 
 def parse_nk_result(_page):
     results = []
-    odds = parse_nk_odds(_page)
+
+    # Get Place Odds
+    rid = fmt(_page.select_one("ul.fc > li.Active > a").get("href"), r"(\d+)")
+    odds = parse_nk_odds(rid)
 
     # Get Prize List
     rd02 = _page.select("div.RaceData02 > span")
@@ -141,8 +144,11 @@ def parse_nk_result(_page):
         result["weight"] = fmt(td[14].text, r"(\d+)\(?[+-]?\d*\)?", "int")
         # WEIGHT DIFF
         result["weight_diff"] = fmt(td[14].text, r"\d+\(([+-]?\d+)\)", "int")
-        # ODDS
-        result.update(odds[result["horse_name"]])
+        # WIN ODDS
+        result["win_odds"] = fmt(td[10].text, r"\d{1,3}\.\d{1}", "float")
+        # PLACE ODDS
+        if odds is not None:
+            result.update(odds[result["horse_name"]])
         # PRIZE
         if result["rank"] <= len(pz_list) and result["rank"] != 0:
             result["prize"] = pz_list[result["rank"]-1]
@@ -154,36 +160,29 @@ def parse_nk_result(_page):
     return results
 
 
-def parse_nk_odds(_page):
+def parse_nk_odds(_rid):
     odds = {}
 
    # Get html
     base_url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={rid}&rf=shutuba_submenu"
-    rid = fmt(_page.select_one("ul.fc > li.Active > a").get("href"), r"(\d+)")
-    odds_page = load(base_url.replace("{rid}", rid), "Odds")
+    odds_page = load(base_url.replace("{rid}", _rid), "Odds")
 
     # Parse race info
     if odds_page is not None:
-        odds_table = odds_page.select("table.RaceOdds_HorseList_Table")
+        odds_table = odds_page.select("div#odds_fuku_block > table > tbody > tr")
     else:
-        return {"status": "ERROR", "message": "There is no odds page: " + rid}
+        return None
 
-    # Get Win(Tansho) Odds or Predicted Odds
-    for tan in odds_table[0].select("tbody > tr")[1:]:
-        late = {}
-        # Odds
-        horse = fmt(tan.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-        late["win"] = fmt(tan.select_one("td.Odds").text, r"\d{1,3}\.\d{1}", "float")
-        odds[horse] = late
-
-    if len(odds_table) == 2:
-        for fuku in odds_table[1].select("tbody > tr")[1:]:
-            late = {}
+    if len(odds_table) > 1:
+        for fuku in odds_table[1:]:
+            rate = {}
             # Odds
             horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-            late["show_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
-            late["show_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
-            odds[horse].update(late)
+            rate["place_odds_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
+            rate["place_odds_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
+            odds[horse] = rate
+    else:
+        return None
 
     return odds
 

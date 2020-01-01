@@ -31,10 +31,11 @@ def load(_url, _selector=None):
             page = None
     except Exception:
         page = None
-    finally:
-        driver.close()
-        driver.quit()
-        time.sleep(5)
+    
+    # Close Connection
+    driver.close()
+    driver.quit()
+    time.sleep(5)
 
     return page
 
