@@ -8,18 +8,13 @@ from controller import load, fmt, to_course, to_place
 
 def collect(_rid):
     # Get Result html
-    base_url = "https://racev3.netkeiba.com/race/result.html?race_id={rid}&rf=race_list"
-    if re.match(r"^\d{12}$", _rid):
-        url = base_url.replace("{rid}", _rid)
-        page = load(url, "ResultTableWrap")
-    else:
-        return {"status": "ERROR", "message": "Invalid URL parameter: " + _rid}
-
+    result_url = "https://racev3.netkeiba.com/race/result.html?race_id={RID}&rf=race_list"
+    page = race_collector(_rid, result_url, "ResultTableWrap")
+    
     # Get Entry html
-    base_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
+    entry_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
     if page is None:
-        url = base_url.replace("{rid}", _rid)
-        page = load(url, "tablesorter")
+        race_collector(_rid, entry_url, "tablesorter")
 
     # Parse race info
     if page is not None:
@@ -27,11 +22,6 @@ def collect(_rid):
     else:
         return {"status": "ERROR", "message": "There is no page: " + url}
 
-    # Insert or Update race info
-    if "_id" in race:
-        mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
-    else:
-        return {"status": "ERROR", "message": "There is no id in page: " + race["_id"]}
 
     return {"status": "SUCCESS", "message": str(race)}
 
@@ -53,6 +43,17 @@ def bulk_collect(_year, _month):
         return {"status": "ERROR", "message": "There is no page: " + url}
 
     return {"status": "SUCCESS", "message": "Start bulk collection process"}
+
+
+def race_collector(_rid, _url, _selector):
+    # Validate Race Id
+    if re.match(r"^\d{12}$", _rid):
+        url = _url.replace("{RID}", _rid)
+        page = load(url, _selector)
+    else:
+        page = None
+
+    return page
 
 
 def parse_nk_race(_page):
@@ -94,6 +95,8 @@ def parse_nk_race(_page):
     race["max_prize"] = fmt(rd02[8].text, r"\d+", "int") * 10000
     # ENTRY
     race["entry"] = parse_nk_result(_page)
+    # UPSERT RACE
+    mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
 
     return race
 
