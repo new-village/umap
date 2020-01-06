@@ -71,14 +71,22 @@ def check_format(_target, _reg):
     return val
 
 
-def to_place(place_id):
-    master = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京", "06": "中山", "07": "中京",
-              "08": "京都", "09": "阪神", "10": "小倉"}
-    place_name = master[place_id]
-    return place_name
+def convert(string, table):
+    """ The function convert string using table
+        if you set string to '障' and table to {'障': '障害', '芝': '芝'},
+        The function retrun '障害'.
+    """
+    if string in table:
+        converted = table[string]
+    else:
+        converted = string
+    return converted
 
 
-def to_course(abbr):
-    master = {"ダ": "ダート", "障": "障害", "芝": "芝"}
-    course_full = master[abbr] if abbr != '' else 0
-    return course_full
+def extract_table(_page, _selector):
+    if _page is not None:
+        table = _page.select(_selector)
+        table = table if table is not None else None
+    else:
+        table = None
+    return table

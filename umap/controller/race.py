@@ -3,27 +3,26 @@ import time
 from datetime import datetime
 
 from app import mongo
-from controller import load, fmt, to_course, to_place
+from controller import load, fmt, convert, extract_table
 
 
 def collect(_rid):
     # Get Result html
     result_url = "https://racev3.netkeiba.com/race/result.html?race_id={RID}&rf=race_list"
-    page = race_collector(_rid, result_url, "ResultTableWrap")
+    page = race_page_load(_rid, result_url, "ResultTableWrap")
     
     # Get Entry html
     entry_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
     if page is None:
-        race_collector(_rid, entry_url, "tablesorter")
+        page = race_page_load(_rid, entry_url, "tablesorter")
 
     # Parse race info
     if page is not None:
-        race = parse_nk_race(page)
+        race = upsert_race(page)
     else:
-        return {"status": "ERROR", "message": "There is no page: " + url}
+        return {"status": "ERROR", "message": "There is no page: " + _rid}
 
-
-    return {"status": "SUCCESS", "message": str(race)}
+    return {"status": "SUCCESS", "message": _rid}
 
 
 def bulk_collect(_year, _month):
@@ -45,8 +44,8 @@ def bulk_collect(_year, _month):
     return {"status": "SUCCESS", "message": "Start bulk collection process"}
 
 
-def race_collector(_rid, _url, _selector):
-    # Validate Race Id
+def race_page_load(_rid, _url, _selector):
+    # Validate Race ID
     if re.match(r"^\d{12}$", _rid):
         url = _url.replace("{RID}", _rid)
         page = load(url, _selector)
@@ -56,138 +55,199 @@ def race_collector(_rid, _url, _selector):
     return page
 
 
-def parse_nk_race(_page):
+def upsert_race(_page):
     """取得したレース出走情報のHTMLから辞書を作成
     netkeiba.comのレースページから情報をパースしてdict形式で返すファンクション
     """
-    race = {}
-
     # RACE ID
-    tmp = _page.select_one("ul.fc > li.Active > a")
-    race["_id"] = fmt(tmp.get("href"), r"(\d+)")
-    # ROUND
-    race["round"] = fmt(tmp.text, r"\d+", "int")
-    # TITLE
-    title = _page.title.text
-    race["title"] = fmt(title, r"([^\x01-\x7E]+)")
-    # GRADE
-    race["grade"] = fmt(title, r"(G\d{1})")
-    # TRACK
-    rd01 = _page.select_one("div.RaceData01").text
-    race["track"] = to_course(fmt(rd01, r"芝|ダ|障"))
-    # DISTANCE
-    race["distance"] = fmt(rd01, r"\d{4}", "int")
-    # WEATHER
-    race["weather"] = fmt(rd01, r"晴|曇|小雨|雨|小雪|雪")
-    # GOING
-    race["going"] = fmt(rd01, r"良|稍重|重|不良")
+    race = {"_id": parse_nk_rid(_page)}
+    # Parse Elements
+    elms = parse_nk_title(_page)
+    elms.update(parse_nk_rd1(_page))
+    elms.update(parse_nk_rd2(_page))
     # RACE DATE
-    dt = fmt(title, r"\d{4}年\d{1,2}月\d{1,2}日")
-    tmp = fmt(rd01, r"\d{2}:\d{2}")
-    tm = tmp if tmp != "" else "0:00"
-    race["date"] = datetime.strptime(dt + " " + tm, "%Y年%m月%d日 %H:%M")
-    # PLACE NAME
-    race["place"] = to_place(race["_id"][4:6])
-    # HEAD COUNT
-    rd02 = _page.select("div.RaceData02 > span")
-    race["count"] = fmt(rd02[7].text, r"([0-9]+)頭", "int")
+    dttm = elms["date"] + " " + elms["time"]
+    race["date"] = datetime.strptime(dttm, "%Y年%m月%d日 %H:%M")
+    # RACE DATE (String)
+    race["date_str"] = datetime.strftime(race["date"], "%Y-%m-%d")
+    # Set Elements
+    target = ["round", "title", "grade", "place", "track", "distance", "weather", "going", "count"]
+    for s in target:
+        race[s] = elms[s]
     # MAX PRIZE
-    race["max_prize"] = fmt(rd02[8].text, r"\d+", "int") * 10000
+    race["max_prize"] = elms["prize"][0]
     # ENTRY
-    race["entry"] = parse_nk_result(_page)
-    # UPSERT RACE
+    race["entry"] = collect_results(_page)
+    # Upsert race
     mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
 
     return race
 
 
-def parse_nk_result(_page):
-    results = []
-
+def collect_results(_page):
     # Get Place Odds
-    rid = fmt(_page.select_one("ul.fc > li.Active > a").get("href"), r"(\d+)")
-    odds = parse_nk_odds(rid)
-
+    odds = collect_odds(parse_nk_rid(_page))
     # Get Prize List
-    rd02 = _page.select("div.RaceData02 > span")
-    pz_list = [fmt(pz, r"\d+", "int") * 10000 for pz in rd02[8].text.split(",")]
+    prize = parse_nk_rd2(_page)["prize"]
+    # Parse Race Info
+    selector = "table#All_Result_Table > tbody > tr"
+    table = extract_table(_page, selector)
 
-    for line in _page.select("table#All_Result_Table > tbody > tr"):
-        result = {}
-        td = line.select("td")
-        # RANK
-        result["rank"] = fmt(td[0].text, r"\d+", "int")
-        # HORSE NUMBER
-        result["horse_number"] = fmt(td[2].text, r"\d+", "int")
-        # BRACKET
-        result["bracket"] = fmt(td[1].text, r"\d+", "int")
-        # HORSE ID
-        result["horse_id"] = fmt(td[3].a.get("href"), r"\d+")
-        # HORSE NAME
-        result["horse_name"] = fmt(td[3].text, r"[^\x01-\x7E]+")
-        # SEX
-        result["sex"] = fmt(td[4].text, r"[牡牝騸セ]")
-        # AGE
-        result["age"] = fmt(td[4].text, r"\d{1,2}", "int")
-        # BURDEN
-        result["burden"] = fmt(td[5].text, r"\d{1,2}\.\d{1}", "float")
-        # JOCKEY ID
-        result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+")
-        # JOCKEY NAME
-        result["jockey_name"] = fmt(td[6].text, r"[^\x01-\x7E]+")
-        # TIME
-        min = fmt(td[7].text, r"(\d{1}):\d{1,2}\.\d{1}", "float") * 60
-        sec = fmt(td[7].text, r"\d{1}:(\d{1,2}\.\d{1})", "float")
-        result["time"] = min + sec
-        # TRAINER ID
-        result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+")
-        # TRAINER NAME
-        result["trainer_name"] = fmt(td[13].a.text, r"[^\x01-\x7E]+")
-        # WEIGHT
-        result["weight"] = fmt(td[14].text, r"(\d+)\(?[+-]?\d*\)?", "int")
-        # WEIGHT DIFF
-        result["weight_diff"] = fmt(td[14].text, r"\d+\(([+-]?\d+)\)", "int")
-        # WIN ODDS
-        result["win_odds"] = fmt(td[10].text, r"\d{1,3}\.\d{1}", "float")
+    # Parse Result Table
+    results = []
+    for line in table:
+        # RESULTS
+        result = parse_nk_result(line)
         # PLACE ODDS
         if odds is not None:
             result.update(odds[result["horse_name"]])
         # PRIZE
-        if result["rank"] <= len(pz_list) and result["rank"] != 0:
-            result["prize"] = pz_list[result["rank"]-1]
+        if result["rank"] <= len(prize) and result["rank"] != 0:
+            result["prize"] = prize[result["rank"]-1]
         else:
             result["prize"] = 0
-
+        # ADD ENTRY
         results.append(result)
     
     return results
 
 
-def parse_nk_odds(_rid):
+def collect_odds(_rid):
+    # Get Result html
+    odds_url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={RID}&rf=shutuba_submenu"
+    page = race_page_load(_rid, odds_url, "Odds")
+
+    # Parse Race Info
+    selector = "div#odds_fuku_block > table > tbody > tr"
+    table = extract_table(page, selector)
+
+    # Parse Odds
     odds = {}
-
-   # Get html
-    base_url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={rid}&rf=shutuba_submenu"
-    odds_page = load(base_url.replace("{rid}", _rid), "Odds")
-
-    # Parse race info
-    if odds_page is not None:
-        odds_table = odds_page.select("div#odds_fuku_block > table > tbody > tr")
-    else:
-        return None
-
-    if len(odds_table) > 1:
-        for fuku in odds_table[1:]:
-            rate = {}
-            # Odds
-            horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-            rate["place_odds_min"] = fmt(fuku.select_one("td.Odds").text, r"(\d+.\d{1}) - \d+.\d{1}", "float")
-            rate["place_odds_max"] = fmt(fuku.select_one("td.Odds").text, r"\d+.\d{1} - (\d+.\d{1})", "float")
-            odds[horse] = rate
-    else:
-        return None
+    for fuku in table[1:]:
+        # HORSE NAME
+        horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
+        # PLACE RATE
+        rate = fuku.select_one("td.Odds").text
+        min_odds = fmt(rate, r"(\d+.\d{1}) - \d+.\d{1}", "float")
+        max_odds = fmt(rate, r"\d+.\d{1} - (\d+.\d{1})", "float")
+        odds[horse] = {"place_odds_min": min_odds, "place_odds_max": max_odds}
 
     return odds
+
+def parse_nk_rid(_page):
+    """ Get Race ID by header tags in NetKeiba Page
+    """
+    # RACE ID
+    url = _page.find("link", {"rel": "canonical"})["href"]
+    rid = fmt(url, r"(\d{12})")
+    return rid
+
+
+def parse_nk_title(_page):
+    """ Get Race Title by header tags in NetKeiba Page
+    """
+    t = _page.title.text
+    # TITLE
+    title = {"title": fmt(t, r"([^\x01-\x7E]+)")}
+    # GRADE
+    title["grade"] = fmt(t, r"\((J?G\d{1})\)")
+    # DATE
+    title["date"] = fmt(t, r"\d{4}年\d{1,2}月\d{1,2}日")
+    # PLACE
+    title["place"] = fmt(t, r" ([一-龥]+)\d{1,2}R")
+    # ROUND
+    title["round"] = fmt(t, r"(\d{1,2})R", "int")
+    return title
+
+
+def parse_nk_rd1(_page):
+    """ Get Race Data by Race Overview in NetKeiba Page
+    """
+    t01 = _page.select_one("div.RaceData01")
+    if t01 is not None:
+        # TRACK
+        track = fmt(t01.text, r"芝|ダ|障")
+        abbr = {"芝": "芝", "ダ": "ダート", "障": "障害"}
+        rd = {"track": convert(track, abbr)}
+
+        # DISTANCE
+        rd["distance"] = fmt(t01.text, r"\d{4}", "int")
+
+        # WHATHER
+        rd["weather"] = fmt(t01.text, r"晴|曇|小雨|雨|小雪|雪")
+
+        # GOING
+        going = fmt(t01.text, r"良|稍|稍重|重|不良|不")
+        abbr = {"稍": "稍重", "不": "不良"}
+        rd["going"] = convert(going, abbr)
+
+        # TIME
+        tm = fmt(t01.text, r"\d{2}:\d{2}")
+        rd["time"] = tm if tm != "" else "0:00"
+
+    return rd
+
+
+def parse_nk_rd2(_page):
+    """ Get Race Data by Race Overview in NetKeiba Page
+    """
+    rd = {}
+    t02 = _page.select("div.RaceData02 > span")
+    # HEAD COUNT
+    rd["count"] = fmt(t02[7].text, r"([0-9]+)頭", "int")
+
+    # PRIZE
+    prize = []
+    for pz in t02[8].text.split(","):
+        prize.append(fmt(pz, r"\d+", "int") * 10000)
+    rd["prize"] = prize
+
+    return rd
+
+
+def parse_nk_result(_line):
+    """ Parse Race Result from line of result table
+    """
+    td = _line.find_all("td")
+    result = {}
+    # RANK
+    result["rank"] = fmt(td[0].text, r"\d+", "int")
+    # HORSE NUMBER
+    result["horse_number"] = fmt(td[2].text, r"\d+", "int")
+    # BRACKET
+    result["bracket"] = fmt(td[1].text, r"\d+", "int")
+    # HORSE ID
+    result["horse_id"] = fmt(td[3].a.get("href"), r"\d+")
+    # HORSE NAME
+    result["horse_name"] = fmt(td[3].text, r"[^\x01-\x7E]+")
+    # SEX
+    sex = fmt(td[4].text, r"[牡牝騸セ]")
+    abbr = {"セ": "騸"}
+    result["sex"] = convert(sex, abbr)
+    # AGE
+    result["age"] = fmt(td[4].text, r"\d{1,2}", "int")
+    # BURDEN
+    result["burden"] = fmt(td[5].text, r"\d{1,2}\.\d{1}", "float")
+    # JOCKEY ID
+    result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+")
+    # JOCKEY NAME
+    result["jockey_name"] = fmt(td[6].text, r"[ぁ-んァ-ンー一-龥Ａ-Ｚ]+")
+    # TIME
+    min = fmt(td[7].text, r"(\d{1}):\d{1,2}\.\d{1}", "float") * 60
+    sec = fmt(td[7].text, r"\d{1}:(\d{1,2}\.\d{1})", "float")
+    result["time"] = min + sec
+    # TRAINER ID
+    result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+")
+    # TRAINER NAME
+    result["trainer_name"] = fmt(td[13].a.text, r"[ぁ-んァ-ンー一-龥]+")
+    # WEIGHT
+    result["weight"] = fmt(td[14].text, r"(\d+)\(?[+-]?\d*\)?", "int")
+    # WEIGHT DIFF
+    result["weight_diff"] = fmt(td[14].text, r"\d+\(([+-]?\d+)\)", "int")
+    # WIN ODDS
+    result["win_odds"] = fmt(td[10].text, r"\d{1,3}\.\d{1}", "float")
+
+    return result
 
 
 def parse_spn_rids(_page):
