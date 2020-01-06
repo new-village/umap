@@ -85,8 +85,11 @@ def upsert_race(_page):
 
 
 def collect_results(_page):
+    rid = parse_nk_rid(_page)
     # Get Place Odds
-    odds = collect_odds(parse_nk_rid(_page))
+    odds = collect_odds(rid)
+    # Get Parents Name
+    parents = collect_parents(rid)
     # Get Prize List
     prize = parse_nk_rd2(_page)["prize"]
     # Parse Race Info
@@ -106,6 +109,9 @@ def collect_results(_page):
             result["prize"] = prize[result["rank"]-1]
         else:
             result["prize"] = 0
+        # PLACE ODDS
+        if parents is not None:
+            result.update(parents[result["horse_name"]])
         # ADD ENTRY
         results.append(result)
     
@@ -114,8 +120,8 @@ def collect_results(_page):
 
 def collect_odds(_rid):
     # Get Result html
-    odds_url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={RID}&rf=shutuba_submenu"
-    page = race_page_load(_rid, odds_url, "Odds")
+    url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={RID}&rf=shutuba_submenu"
+    page = race_page_load(_rid, url, "Odds")
 
     # Parse Race Info
     selector = "div#odds_fuku_block > table > tbody > tr"
@@ -133,6 +139,29 @@ def collect_odds(_rid):
         odds[horse] = {"place_odds_min": min_odds, "place_odds_max": max_odds}
 
     return odds
+
+
+def collect_parents(_rid):
+    # Get Result html
+    url = "https://racev3.netkeiba.com/race/shutuba_past.html?race_id={RID}&rf=shutuba_submenu"
+    page = race_page_load(_rid, url, "Shutuba_Past5_Table")
+
+    # Parse Race Info
+    selector = "div.Shutuba_HorseList > table > tbody > tr"
+    table = extract_table(page, selector)
+
+    # Parse Odds
+    parents = {}
+    for line in table[1:]:
+        # HORSE NAME
+        horse = fmt(line.select_one("div.Horse02").text, r"[^\x01-\x7E]+")
+        # PARENT NAME
+        father = fmt(line.select_one("div.Horse01").text, r"[^\x01-\x7E]+")
+        mother = fmt(line.select_one("div.Horse03").text, r"[^\x01-\x7E]+")
+        parents[horse] = {"father_name": father, "mother_name": mother}
+
+    return parents
+
 
 def parse_nk_rid(_page):
     """ Get Race ID by header tags in NetKeiba Page
