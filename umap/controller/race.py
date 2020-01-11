@@ -1,6 +1,7 @@
 import re
 import time
 from datetime import datetime
+from pymongo import UpdateOne
 
 from app import mongo
 from controller import load, fmt, convert, extract_table
@@ -8,13 +9,13 @@ from controller import load, fmt, convert, extract_table
 
 def collect(_rid):
     # Get Result html
-    result_url = "https://racev3.netkeiba.com/race/result.html?race_id={RID}&rf=race_list"
-    page = race_page_load(_rid, result_url, "ResultTableWrap")
+    url = "https://racev3.netkeiba.com/race/result.html?race_id=" + _rid + "&rf=race_list"
+    page = load(url, "ResultTableWrap")
     
     # Get Entry html
-    entry_url = "https://racev3.netkeiba.com/race/shutuba.html?race_id={rid}&rf=race_submenu"
     if page is None:
-        page = race_page_load(_rid, entry_url, "tablesorter")
+        url = "https://racev3.netkeiba.com/race/shutuba.html?race_id=" + _rid + "&rf=race_submenu"
+        page = load(url, "tablesorter")
 
     # Parse race info
     if page is not None:
@@ -44,73 +45,60 @@ def bulk_collect(_year, _month):
     return {"status": "SUCCESS", "message": "Start bulk collection process"}
 
 
-def race_page_load(_rid, _url, _selector):
-    # Validate Race ID
-    if re.match(r"^\d{12}$", _rid):
-        url = _url.replace("{RID}", _rid)
-        page = load(url, _selector)
-    else:
-        page = None
-
-    return page
-
-
 def upsert_race(_page):
-    """取得したレース出走情報のHTMLから辞書を作成
-    netkeiba.comのレースページから情報をパースしてdict形式で返すファンクション
+    """ 取得したレース情報をデータベースに書き込むファンクション
     """
     # RACE ID
-    race = {"_id": parse_nk_rid(_page)}
-    # Parse Elements
-    elms = parse_nk_title(_page)
-    elms.update(parse_nk_rd1(_page))
-    elms.update(parse_nk_rd2(_page))
+    race = {"race_id": parse_nk_rid(_page)}
+    # ROUND, TITLE, GRADE, PLACE, DATE_STR
+    race.update(parse_nk_title(_page))
+    # TRACK, DISTANCE, WEATHER, GOING, TIME 
+    race.update(parse_nk_rd1(_page))
+    # COUNT, PRIZE
+    race.update(parse_nk_rd2(_page))
     # RACE DATE
-    dttm = elms["date"] + " " + elms["time"]
-    race["date"] = datetime.strptime(dttm, "%Y年%m月%d日 %H:%M")
-    # RACE DATE (String)
-    race["date_str"] = datetime.strftime(race["date"], "%Y-%m-%d")
-    # Set Elements
-    target = ["round", "title", "grade", "place", "track", "distance", "weather", "going", "count"]
-    for s in target:
-        race[s] = elms[s]
+    dttm = race["date_str"] + " " + race["time"]
+    race["date"] = datetime.strptime(dttm, "%Y-%m-%d %H:%M")
     # MAX PRIZE
-    race["max_prize"] = elms["prize"][0]
+    race["max_prize"] = race["prize"][0]
     # ENTRY
     race["entry"] = collect_results(_page)
     # Upsert race
-    mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
+    mongo.db.races.bulk_write( )
 
     return race
 
 
 def collect_results(_page):
+    """ 取得した出走情報をリスト型で纏めて返すファンクション
+    """
+    # RACE ID
     rid = parse_nk_rid(_page)
-    # Get Place Odds
+    # ODDS
     odds = collect_odds(rid)
-    # Get Parents Name
+    # PARENTS
     parents = collect_parents(rid)
-    # Get Prize List
+    # PRIZE
     prize = parse_nk_rd2(_page)["prize"]
-    # Parse Race Info
+    # RESULT TABLE
     selector = "table#All_Result_Table > tbody > tr"
     table = extract_table(_page, selector)
 
-    # Parse Result Table
+    # RESULT TABLE
     results = []
     for line in table:
         # RESULTS
         result = parse_nk_result(line)
         # PLACE ODDS
-        if odds is not None:
+        if result["horse_name"] in odds:
             result.update(odds[result["horse_name"]])
         # PRIZE
         if result["rank"] <= len(prize) and result["rank"] != 0:
-            result["prize"] = prize[result["rank"]-1]
+            result["prize"] = prize[result["rank"] - 1]
         else:
             result["prize"] = 0
-        # PLACE ODDS
-        if parents is not None:
+        # PARENTS
+        if result["horse_name"] in parents:
             result.update(parents[result["horse_name"]])
         # ADD ENTRY
         results.append(result)
@@ -120,8 +108,8 @@ def collect_results(_page):
 
 def collect_odds(_rid):
     # Get Result html
-    url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id={RID}&rf=shutuba_submenu"
-    page = race_page_load(_rid, url, "Odds")
+    url = "https://racev3.netkeiba.com/odds/index.html?type=b1&race_id=" + _rid + "&rf=shutuba_submenu"
+    page = load(url, "Odds")
 
     # Parse Race Info
     selector = "div#odds_fuku_block > table > tbody > tr"
@@ -144,7 +132,7 @@ def collect_odds(_rid):
 def collect_parents(_rid):
     # Get Result html
     url = "https://racev3.netkeiba.com/race/shutuba_past.html?race_id={RID}&rf=shutuba_submenu"
-    page = race_page_load(_rid, url, "Shutuba_Past5_Table")
+    page = load(url, "Shutuba_Past5_Table")
 
     # Parse Race Info
     selector = "div.Shutuba_HorseList > table > tbody > tr"
@@ -156,9 +144,10 @@ def collect_parents(_rid):
         # HORSE NAME
         horse = fmt(line.select_one("div.Horse02").text, r"[^\x01-\x7E]+")
         # PARENT NAME
-        father = fmt(line.select_one("div.Horse01").text, r"[^\x01-\x7E]+")
-        mother = fmt(line.select_one("div.Horse03").text, r"[^\x01-\x7E]+")
-        parents[horse] = {"father_name": father, "mother_name": mother}
+        father = fmt(line.select_one("div.Horse01").text, r".+")
+        mother = fmt(line.select_one("div.Horse03").text, r".+")
+        grand_father = fmt(line.select_one("div.Horse04").text, r"?\((.+)?\)")
+        parents[horse] = {"father": father, "mother": mother, "grand_father": grand_father}
 
     return parents
 
@@ -181,7 +170,8 @@ def parse_nk_title(_page):
     # GRADE
     title["grade"] = fmt(t, r"\((J?G\d{1})\)")
     # DATE
-    title["date"] = fmt(t, r"\d{4}年\d{1,2}月\d{1,2}日")
+    dt = fmt(t, r"(\d{4}年\d{1,2}月\d{1,2})日")
+    title["date_str"] = re.sub(r"[年月]", "-", dt)
     # PLACE
     title["place"] = fmt(t, r" ([一-龥]+)\d{1,2}R")
     # ROUND
