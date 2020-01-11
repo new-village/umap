@@ -35,7 +35,7 @@ def load(_url, _selector=None):
     # Close Connection
     driver.close()
     driver.quit()
-    time.sleep(5)
+    time.sleep(8)
 
     return page
 

@@ -64,7 +64,7 @@ def upsert_race(_page):
     # ENTRY
     race["entry"] = collect_results(_page)
     # Upsert race
-    mongo.db.races.bulk_write( )
+    mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
 
     return race
 
