@@ -1,7 +1,9 @@
 from flask import Flask, render_template, request
+from flask.json import jsonify
 from flask_restful import Resource, Api
 from flask_pymongo import PyMongo
 from datetime import datetime, timedelta
+from bson import json_util
 from controller import race
 
 
@@ -18,7 +20,8 @@ def index():
 
 class Races(Resource):
     def get(self):
-        return {'GET Races': 'SUCCESS'}
+        record = [rec for rec in mongo.db.races.find()]
+        return jsonify(record)
 
     def post(self):
         # Set Collected Date Parameter
@@ -34,7 +37,8 @@ class Races(Resource):
 
 class Race(Resource):
     def get(self, race_id):
-        return {'GET Race': race_id}
+        record = mongo.db.races.find_one({"_id": race_id})
+        return jsonify(record)
 
     def post(self, race_id):
         # Collect Race Data

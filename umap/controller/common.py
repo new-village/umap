@@ -1,6 +1,9 @@
 import re
 import time
+from datetime import datetime
 from bs4 import BeautifulSoup as bs
+from requests import Session, HTTPError
+
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -35,7 +38,7 @@ def load(_url, _selector=None):
     # Close Connection
     driver.close()
     driver.quit()
-    time.sleep(8)
+    time.sleep(6)
 
     return page
 
@@ -54,6 +57,8 @@ def fmt(_target, _reg, _type="str"):
         val = int(re.sub(",", "", val)) if val is not None else 0
     elif _type == "float":
         val = float(re.sub(",", "", val)) if val is not None else 0
+    elif _type == "date":
+        val = datetime.strptime(val, '%Y年%m月%d日')
     else:
         val = str(val) if val is not None else ""    
 

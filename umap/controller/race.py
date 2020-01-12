@@ -1,7 +1,6 @@
 import re
 import time
 from datetime import datetime
-from pymongo import UpdateOne
 
 from app import mongo
 from controller import load, fmt, convert, extract_table
@@ -49,7 +48,7 @@ def upsert_race(_page):
     """ 取得したレース情報をデータベースに書き込むファンクション
     """
     # RACE ID
-    race = {"race_id": parse_nk_rid(_page)}
+    race = {"_id": parse_nk_rid(_page)}
     # ROUND, TITLE, GRADE, PLACE, DATE_STR
     race.update(parse_nk_title(_page))
     # TRACK, DISTANCE, WEATHER, GOING, TIME 
@@ -63,6 +62,8 @@ def upsert_race(_page):
     race["max_prize"] = race["prize"][0]
     # ENTRY
     race["entry"] = collect_results(_page)
+    # DELETE KEY
+    del race["prize"], race["time"]
     # Upsert race
     mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
 
@@ -131,7 +132,7 @@ def collect_odds(_rid):
 
 def collect_parents(_rid):
     # Get Result html
-    url = "https://racev3.netkeiba.com/race/shutuba_past.html?race_id={RID}&rf=shutuba_submenu"
+    url = "https://racev3.netkeiba.com/race/shutuba_past.html?race_id=" + _rid + "&rf=shutuba_submenu"
     page = load(url, "Shutuba_Past5_Table")
 
     # Parse Race Info
@@ -146,8 +147,7 @@ def collect_parents(_rid):
         # PARENT NAME
         father = fmt(line.select_one("div.Horse01").text, r".+")
         mother = fmt(line.select_one("div.Horse03").text, r".+")
-        grand_father = fmt(line.select_one("div.Horse04").text, r"?\((.+)?\)")
-        parents[horse] = {"father": father, "mother": mother, "grand_father": grand_father}
+        parents[horse] = {"father_name": father, "mother_name": mother}
 
     return parents
 
@@ -170,8 +170,8 @@ def parse_nk_title(_page):
     # GRADE
     title["grade"] = fmt(t, r"\((J?G\d{1})\)")
     # DATE
-    dt = fmt(t, r"(\d{4}年\d{1,2}月\d{1,2})日")
-    title["date_str"] = re.sub(r"[年月]", "-", dt)
+    dt = fmt(t, r"\d{4}年\d{1,2}月\d{1,2}日", "date")
+    title["date_str"] = dt.strftime("%Y-%m-%d")
     # PLACE
     title["place"] = fmt(t, r" ([一-龥]+)\d{1,2}R")
     # ROUND
