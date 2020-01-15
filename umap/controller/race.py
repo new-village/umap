@@ -236,7 +236,8 @@ def parse_nk_result(_line):
     # BRACKET
     result["bracket"] = fmt(td[1].text, r"\d+", "int")
     # HORSE ID
-    result["horse_id"] = fmt(td[3].a.get("href"), r"\d+")
+    if td[3].a is not None:
+        result["horse_id"] = fmt(td[3].a.get("href"), r"\d+")
     # HORSE NAME
     result["horse_name"] = fmt(td[3].text, r"[^\x01-\x7E]+")
     # SEX
@@ -248,7 +249,8 @@ def parse_nk_result(_line):
     # BURDEN
     result["burden"] = fmt(td[5].text, r"\d{1,2}\.\d{1}", "float")
     # JOCKEY ID
-    result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+")
+    if td[6].a is not None:
+        result["jockey_id"] = fmt(td[6].a.get("href"), r"\d+")
     # JOCKEY NAME
     result["jockey_name"] = fmt(td[6].text, r"[ぁ-んァ-ンー一-龥Ａ-Ｚ]+")
     # TIME
@@ -256,9 +258,11 @@ def parse_nk_result(_line):
     sec = fmt(td[7].text, r"\d{1}:(\d{1,2}\.\d{1})", "float")
     result["time"] = min + sec
     # TRAINER ID
-    result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+")
+    if td[13].a is not None:
+        result["trainer_id"] = fmt(td[13].a.get("href"), r"\d+")
     # TRAINER NAME
-    result["trainer_name"] = fmt(td[13].a.text, r"[ぁ-んァ-ンー一-龥]+")
+    if td[13].a is not None:
+        result["trainer_name"] = fmt(td[13].a.text, r"[ぁ-んァ-ンー一-龥]+")
     # WEIGHT
     result["weight"] = fmt(td[14].text, r"(\d+)\(?[+-]?\d*\)?", "int")
     # WEIGHT DIFF

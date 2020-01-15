@@ -4,7 +4,7 @@
 # USAGE: ./collect.sh {YEAR:2019}
 # #########################################################
 # USER DEFINE VARIABLES
-HOST=umap.ml
+HOST=localhost
 PORT=5000
 ENTITY=races
 
