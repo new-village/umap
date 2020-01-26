@@ -50,7 +50,7 @@ class Race(Resource):
 class Stats(Resource):
     def get(self):
         pipeline = [
-            {"$group": {"_id": "$track", "count": {"$sum": 1}}}
+            {"$group": {"_id": {"YEAR": {"$year": "$date"}, "MONTH": {"$month": "$date"}}, "count": {"$sum": 1}}}
         ]
         record = list(mongo.db.races.aggregate(pipeline))
         return jsonify(record)
