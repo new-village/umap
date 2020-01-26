@@ -8,7 +8,8 @@ from controller import race
 
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb://localhost:27017/umap"
+app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@localhost:27017/umap"
+app.config['JSON_AS_ASCII'] = False
 mongo = PyMongo(app)
 api = Api(app)
 
@@ -46,8 +47,18 @@ class Race(Resource):
         return msg
 
 
+class Stats(Resource):
+    def get(self):
+        pipeline = [
+            {"$group": {"_id": "$track", "count": {"$sum": 1}}}
+        ]
+        record = list(mongo.db.races.aggregate(pipeline))
+        return jsonify(record)
+
+
 api.add_resource(Races, '/races')
 api.add_resource(Race, '/races/<string:race_id>')
+api.add_resource(Stats, '/stats/races')
 
 
 if __name__ == '__main__':
