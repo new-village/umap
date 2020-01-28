@@ -279,6 +279,8 @@ def parse_nk_result(_line):
     result["weight_diff"] = fmt(td[14].text, r"\d+\(([+-]?\d+)\)", "int")
     # WIN ODDS
     result["win_odds"] = fmt(td[10].text, r"\d{1,3}\.\d{1}", "float")
+    # ODDS RANK
+    result["odds_rank"] = fmt(td[9].text, r"\d+", "int")
 
     return result
 
