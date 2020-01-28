@@ -5,3 +5,4 @@ requests==2.22.0
 beautifulsoup4==4.8.2
 selenium==3.141.0
 lxml==4.4.2
+flask-compress==1.4.0

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 from flask.json import jsonify
 from flask_restful import Resource, Api
 from flask_pymongo import PyMongo
+from flask_compress import Compress
 from datetime import datetime, timedelta
 from bson import json_util
 from controller import race
@@ -12,6 +13,7 @@ app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@localhost:27017/umap"
 app.config['JSON_AS_ASCII'] = False
 mongo = PyMongo(app)
 api = Api(app)
+compress = Compress(app)
 
 
 @app.route('/')
@@ -21,7 +23,7 @@ def index():
 
 class Races(Resource):
     def get(self):
-        record = [rec for rec in mongo.db.races.find()]
+        record = list(mongo.db.races.find())
         return jsonify(record)
 
     def post(self):
@@ -50,7 +52,7 @@ class Race(Resource):
 class Stats(Resource):
     def get(self):
         pipeline = [
-            {"$group": {"_id": {"YEAR": {"$year": "$date"}, "MONTH": {"$month": "$date"}}, "count": {"$sum": 1}}}
+            {"$group": {"_id": {"YEAR": {"$year": "$date"}, "MONTH": {"$month": "$date"}}, "count": {"$sum": 1}, "date": {"$first": "$date_str"}}}
         ]
         record = list(mongo.db.races.aggregate(pipeline))
         return jsonify(record)
