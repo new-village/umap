@@ -126,14 +126,15 @@ def collect_odds(_rid):
 
     # Parse Odds
     odds = {}
-    for fuku in table[1:]:
-        # HORSE NAME
-        horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
-        # PLACE RATE
-        rate = fuku.select_one("td.Odds").text
-        min_odds = fmt(rate, r"(\d+.\d{1}) - \d+.\d{1}", "float")
-        max_odds = fmt(rate, r"\d+.\d{1} - (\d+.\d{1})", "float")
-        odds[horse] = {"place_odds_min": min_odds, "place_odds_max": max_odds}
+    if table is not None:
+        for fuku in table[1:]:
+            # HORSE NAME
+            horse = fmt(fuku.select_one("td.Horse_Name").text, r"[^\x01-\x7E]+")
+            # PLACE RATE
+            rate = fuku.select_one("td.Odds").text
+            min_odds = fmt(rate, r"(\d+.\d{1}) - \d+.\d{1}", "float")
+            max_odds = fmt(rate, r"\d+.\d{1} - (\d+.\d{1})", "float")
+            odds[horse] = {"place_odds_min": min_odds, "place_odds_max": max_odds}
 
     return odds
 
