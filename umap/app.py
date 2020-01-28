@@ -9,7 +9,7 @@ from controller import race
 
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@umap.ml:27017/umap"
+app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@localhost:27017/umap"
 app.config['JSON_AS_ASCII'] = False
 mongo = PyMongo(app)
 api = Api(app)
@@ -66,4 +66,4 @@ api.add_resource(Count, '/stat/count')
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0", debug=True)
