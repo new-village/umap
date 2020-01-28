@@ -9,7 +9,7 @@ from controller import race
 
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@localhost:27017/umap"
+app.config["MONGO_URI"] = "mongodb://admin:UMap2020!@umap.ml:27017/umap"
 app.config['JSON_AS_ASCII'] = False
 mongo = PyMongo(app)
 api = Api(app)
@@ -49,10 +49,12 @@ class Race(Resource):
         return msg
 
 
-class Stats(Resource):
+class Count(Resource):
     def get(self):
         pipeline = [
-            {"$group": {"_id": {"YEAR": {"$year": "$date"}, "MONTH": {"$month": "$date"}}, "count": {"$sum": 1}, "date": {"$first": "$date_str"}}}
+            {"$group": {"_id": {"YEAR": {"$year": "$datetime"}, "MONTH": {"$month": "$datetime"}}, "count": {"$sum": 1}, "date": {"$last": "$date"}}},
+            {"$project": { "_id": 0 } },
+            {"$sort" : { "date" : -1} }
         ]
         record = list(mongo.db.races.aggregate(pipeline))
         return jsonify(record)
@@ -60,8 +62,8 @@ class Stats(Resource):
 
 api.add_resource(Races, '/races')
 api.add_resource(Race, '/races/<string:race_id>')
-api.add_resource(Stats, '/stats/races')
+api.add_resource(Count, '/stat/count')
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0", debug=True)
