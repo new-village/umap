@@ -1,5 +1,6 @@
 import re
 import time
+import random
 from datetime import datetime
 
 from app import mongo
@@ -18,7 +19,7 @@ def collect(_rid):
 
     # Parse race info
     if page is not None:
-        race = upsert_race(page)
+        upsert_race(page)
     else:
         return {"status": "ERROR", "message": "There is no page: " + _rid}
 
@@ -48,24 +49,31 @@ def upsert_race(_page):
     """ 取得したレース情報をデータベースに書き込むファンクション
     """
     # RACE ID
-    race = {"_id": parse_nk_rid(_page)}
+    race = {"race_id": parse_nk_rid(_page)}
     # ROUND, TITLE, GRADE, PLACE, DATE_STR
     race.update(parse_nk_title(_page))
     # TRACK, DISTANCE, WEATHER, GOING, TIME 
     race.update(parse_nk_rd1(_page))
     # COUNT, PRIZE
     race.update(parse_nk_rd2(_page))
-    # RACE DATE
+    # RACE DATETIME
     dttm = race["date_str"] + " " + race["time"]
-    race["date"] = datetime.strptime(dttm, "%Y-%m-%d %H:%M")
+    race["datetime"] = datetime.strptime(dttm, "%Y%m%d %H:%M")
+    # RACE DATE
+    race["date"] = int(race["date_str"])
     # MAX PRIZE
     race["max_prize"] = race["prize"][0]
-    # ENTRY
-    race["entry"] = collect_results(_page)
     # DELETE KEY
-    del race["prize"], race["time"]
-    # Upsert race
-    mongo.db.races.update({"_id": race["_id"]}, race, upsert=True)
+    del race["prize"], race["time"], race["date_str"]
+    # ENTRY OR RESULT
+    entry = collect_results(_page)
+    for r in entry:
+        row = race.copy()
+        row.update(r)
+        if row.get("horse_id") is not None:
+            row["_id"] = row["race_id"] + row["horse_id"]
+        # Upsert race
+        mongo.db.races.update({"_id": row["_id"]}, row, upsert=True)
 
     return race
 
@@ -147,7 +155,8 @@ def collect_parents(_rid):
         # PARENT NAME
         father = fmt(line.select_one("div.Horse01").text, r".+")
         mother = fmt(line.select_one("div.Horse03").text, r".+")
-        parents[horse] = {"father_name": father, "mother_name": mother}
+        grand = fmt(line.select_one("div.Horse04").text, r"\((.+)\)")
+        parents[horse] = {"father_name": father, "mother_name": mother, "grand_name": grand}
 
     return parents
 
@@ -171,7 +180,7 @@ def parse_nk_title(_page):
     title["grade"] = fmt(t, r"\((J?G\d{1})\)")
     # DATE
     dt = fmt(t, r"\d{4}年\d{1,2}月\d{1,2}日", "date")
-    title["date_str"] = dt.strftime("%Y-%m-%d")
+    title["date_str"] = dt.strftime("%Y%m%d")
     # PLACE
     title["place"] = fmt(t, r" ([一-龥]+)\d{1,2}R")
     # ROUND
