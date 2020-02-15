@@ -52,7 +52,8 @@ class Race(Resource):
 class Count(Resource):
     def get(self):
         pipeline = [
-            {"$group": {"_id": {"YEAR": {"$year": "$datetime"}, "MONTH": {"$month": "$datetime"}}, "count": {"$sum": 1}, "date": {"$last": "$date"}}},
+            {"$group": {"_id": "$race_id", "date": {"$max": "$date"}} },
+            {"$group": {"_id": {"YEAR": {"$substr": ["$date", 0, 6]}}, "count": {"$sum": 1}, "date": {"$max": "$date"}}},
             {"$project": { "_id": 0 } },
             {"$sort" : { "date" : -1} }
         ]

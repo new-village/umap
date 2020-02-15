@@ -57,14 +57,12 @@ def upsert_race(_page):
     # COUNT, PRIZE
     race.update(parse_nk_rd2(_page))
     # RACE DATETIME
-    dttm = race["date_str"] + " " + race["time"]
+    dttm = race["date"] + " " + race["time"]
     race["datetime"] = datetime.strptime(dttm, "%Y%m%d %H:%M")
-    # RACE DATE
-    race["date"] = int(race["date_str"])
     # MAX PRIZE
     race["max_prize"] = race["prize"][0]
     # DELETE KEY
-    del race["prize"], race["time"], race["date_str"]
+    del race["prize"], race["time"]
     # ENTRY OR RESULT
     entry = collect_results(_page)
     for r in entry:
@@ -181,7 +179,7 @@ def parse_nk_title(_page):
     title["grade"] = fmt(t, r"\((J?G\d{1})\)")
     # DATE
     dt = fmt(t, r"\d{4}年\d{1,2}月\d{1,2}日", "date")
-    title["date_str"] = dt.strftime("%Y%m%d")
+    title["date"] = dt.strftime("%Y%m%d")
     # PLACE
     title["place"] = fmt(t, r" ([一-龥]+)\d{1,2}R")
     # ROUND
