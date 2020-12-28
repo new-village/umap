@@ -4,8 +4,8 @@ UMAP
 UMAP is an all-in-one solution for Japanese horse racing prediction. It is possible to manage that are collecting data, creates models, applies model, view predictions and these functions automation on Web UI.
 
 ## Requirement
-* Docker 19.03.5
-* docker-compose 1.25.0
+* Docker 20.10
+* docker-compose 1.27.4
 * git
 
 ## Usage
@@ -16,4 +16,4 @@ $ git clone git@github.com:New-Village/umap.git
 $ cd umap
 $ sudo docker-compose -f "docker-compose.yml" up -d --build
 ```
-2. Access http://{SERVER}:5000/race
+2. Access http://{SERVER}:5000/
